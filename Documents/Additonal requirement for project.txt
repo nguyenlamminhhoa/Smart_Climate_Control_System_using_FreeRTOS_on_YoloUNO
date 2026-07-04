@@ -1,0 +1,7 @@
+- LCD checks every 5 seconds, tasks check every half second => integrate them into the system.
+
+- Flexible naming conventions, not necessarily Producer and Consumer.
+
+- Follow the RTOS structure and system design.
+
+- Program according to design, not by inventing features and adding them (e.g., if... else).
