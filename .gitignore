@@ -1,0 +1,39 @@
+# --- OS Temporary Files ---
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+
+# --- Arduino IDE ---
+# Ignores build folders and local override configurations
+.build/
+build/
+*.local.txt
+
+# --- PlatformIO (If using VS Code + PlatformIO) ---
+.pio/
+.pioenvs/
+.piolibdeps/
+.clang_complete
+.gcc-flags.json
+.mxproject
+
+# --- ESP-IDF (Espressif Official Framework) ---
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles/
+Makefile
+sdkconfig
+sdkconfig.old
+
+# --- Documentation & Media ---
+# Un-comment the lines below if you do NOT want to push your project PDF 
+# or demonstration snapshots to GitHub.
+# *.pdf
+# *.png
+# *.jpg
+# *.jpeg
+
+# --- Credentials / Security (If you add Wi-Fi features later) ---
+private.h
+secrets.h
