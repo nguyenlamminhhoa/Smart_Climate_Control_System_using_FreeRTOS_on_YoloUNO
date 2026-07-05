@@ -15,7 +15,7 @@ class SharedState:
     def __init__(self):
         self._temperature = 0.0  # last known temperature
         self._humidity = 0.0     # last known humidity
-        self._mutex = asyncio.Semaphore(1)  # value=1 -> classic mutex lock
+        self._mutex = asyncio.Semaphore(1)  # value=1 then classic mutex lock
 
     async def write(self, temperature, humidity):
         await self._mutex.acquire()  # lock before touching the values
@@ -37,10 +37,10 @@ class SharedState:
 
 class State:
     # name          : just for debugging/printing
-    # action        : runs once right when we enter this state (e.g. set LED color)
+    # action        : runs once right when we enter this state (set LED color)
     # duration_ms   : None means reactive (checked every tick), a number means timed
     # next_if_timed : where to go once duration_ms is over, no condition needed
-    # next_fn       : function(temp, humid) -> next state name, used for
+    # next_fn       : function(temp, humid) to next state name, used for
     #                 reactive states and for timed states that branch after
     #                 the timer runs out
     def __init__(self, name, action, duration_ms=None,
@@ -77,6 +77,14 @@ class StateMachine:
         state = self._states[self._current]      # look up current state config
         temp, humid = await self._shared_state.read()  # read latest sensor values (locked)
 
+        # additional feature: if the sensor is in error and this table has
+        # an error state, jump there right away, no matter what state (or
+        # how far into a timed dwell) we currently are in
+        if "ERROR_ON" in self._states and is_sensor_error(temp, humid) \
+                and self._current not in ERROR_STATE_NAMES:
+            self._transition_to("ERROR_ON")
+            return
+
         if state.duration_ms is None:
             # reactive state, e.g. heater: just re-check the condition every tick
             if state.next_fn is not None:
@@ -99,6 +107,20 @@ class StateMachine:
             await self.tick()               # then check/update the state
 
 
+# additional feature: sensor error indicator, 05.07.2026
+# if the DHT20 ever reports temp=0 and humid=0 at the same time, that's
+# treated as a sensor failure/disconnection rather than a real reading.
+# this helper is shared by the sensor task (for the LCD message) and by
+# the state machine engine (for making all 3 LEDs blink yellow)
+def is_sensor_error(temp, humid):
+    return temp == 0 and humid == 0
+
+
+# both of these state names must exist in a table for the blink override
+# below to kick in - see StateMachine.tick()
+ERROR_STATE_NAMES = ("ERROR_ON", "ERROR_OFF")
+
+
 # Stage 3: sensor task, the only one allowed to write shared state 03.07.2026
 # runs every 5000ms as required, updates the LCD and stores the reading
 
@@ -115,14 +137,20 @@ async def task_sensor(shared_state):
 
         await shared_state.write(temp, humid)  # store it (this locks/unlocks internally)
 
-        lcd1602.clear()                     # clear screen before drawing new values
-        lcd1602.show("TEMP:", 0, 0)         # label on row 0
-        lcd1602.show(str(temp), 0, 6)       # temperature value
-        lcd1602.show(chr(0) + "C", 0, 6 + len(str(temp)))  # degree symbol + C
+        # additional feature: show a clear error message instead of the, 05.07.2026
+        # normal readings when the sensor reports 0/0 (treated as a failure)
+        if is_sensor_error(temp, humid):
+            lcd1602.clear()
+            lcd1602.show("Sensor error", 0, 0)
+        else:
+            lcd1602.clear()                     # clear screen before drawing new values
+            lcd1602.show("TEMP:", 0, 0)         # label on row 0
+            lcd1602.show(str(temp), 0, 6)       # temperature value
+            lcd1602.show(chr(0) + "C", 0, 6 + len(str(temp)))  # degree symbol + C
 
-        lcd1602.show("HUMI:", 1, 0)         # label on row 1
-        lcd1602.show(str(humid), 1, 6)      # humidity value
-        lcd1602.show("%", 1, 6 + len(str(humid)))  # percent sign
+            lcd1602.show("HUMI:", 1, 0)         # label on row 1
+            lcd1602.show(str(humid), 1, 6)      # humidity value
+            lcd1602.show("%", 1, 6 + len(str(humid)))  # percent sign
 
         print("[SENSOR] temp={} humid={}".format(temp, humid))  # log to console for debugging
 
@@ -150,6 +178,22 @@ def heater_next_state(temp, humid):
         return "CRITICAL"   # above 30C is critical
 
 
+# additional feature: while the LED is on (yellow), decide each second, 05.07.2026
+# whether to switch off (still erroring) or go back to a real reading
+def heater_error_on_next_state(temp, humid):
+    if is_sensor_error(temp, humid):
+        return "ERROR_OFF"                # still erroring, blink off next
+    return heater_next_state(temp, humid)  # sensor recovered, show real state
+
+
+# additional feature: while the LED is off, decide each second whether to
+# switch back on (still erroring) or go back to a real reading
+def heater_error_off_next_state(temp, humid):
+    if is_sensor_error(temp, humid):
+        return "ERROR_ON"                 # still erroring, blink on next
+    return heater_next_state(temp, humid)  # sensor recovered, show real state
+
+
 heater_states = {
     "SAFE": State(
         "SAFE",
@@ -165,6 +209,19 @@ heater_states = {
         "CRITICAL",
         action=lambda: rgb_led_D3.show(0, hex_to_rgb('#FF0000')),  # red
         next_fn=heater_next_state,
+    ),
+    # additional feature: blink yellow every 1s while the sensor is in error
+    "ERROR_ON": State(
+        "ERROR_ON",
+        action=lambda: rgb_led_D3.show(0, hex_to_rgb('#FFFF00')),  # blink on
+        duration_ms=1000,
+        next_fn=heater_error_on_next_state,
+    ),
+    "ERROR_OFF": State(
+        "ERROR_OFF",
+        action=lambda: rgb_led_D3.show(0, hex_to_rgb('#000000')),  # blink off
+        duration_ms=1000,
+        next_fn=heater_error_off_next_state,
     ),
 }
 
@@ -183,6 +240,19 @@ def cooler_idle_next_state(temp, humid):
     return "COOLING" if temp > 30 else "IDLE"  # only IDLE decides when to start cooling
 
 
+# additional feature: same blink-then-recheck pattern as the heater above
+def cooler_error_on_next_state(temp, humid):
+    if is_sensor_error(temp, humid):
+        return "ERROR_OFF"
+    return cooler_idle_next_state(temp, humid)  # sensor recovered, recheck normally
+
+
+def cooler_error_off_next_state(temp, humid):
+    if is_sensor_error(temp, humid):
+        return "ERROR_ON"
+    return cooler_idle_next_state(temp, humid)  # sensor recovered, recheck normally
+
+
 cooler_states = {
     "IDLE": State(
         "IDLE",
@@ -194,6 +264,19 @@ cooler_states = {
         action=lambda: rgb_led_D5.show(0, hex_to_rgb('#00FF00')),  # green while cooling
         duration_ms=5000,      # stays on for exactly 5s no matter what
         next_if_timed="IDLE",  # then goes back to IDLE to check again
+    ),
+    # additional feature: blink yellow every 1s while the sensor is in error
+    "ERROR_ON": State(
+        "ERROR_ON",
+        action=lambda: rgb_led_D5.show(0, hex_to_rgb('#FFFF00')),  # blink on
+        duration_ms=1000,
+        next_fn=cooler_error_on_next_state,
+    ),
+    "ERROR_OFF": State(
+        "ERROR_OFF",
+        action=lambda: rgb_led_D5.show(0, hex_to_rgb('#000000')),  # blink off
+        duration_ms=1000,
+        next_fn=cooler_error_off_next_state,
     ),
 }
 
@@ -215,6 +298,19 @@ def humidifier_red_next_state(temp, humid):
     # after the red phase ends, check again: still dry -> restart cycle,
     # otherwise -> turn off
     return "GREEN" if humid < 50 else "IDLE"
+
+
+# additional feature: same blink-then-recheck pattern as heater/cooler above
+def humidifier_error_on_next_state(temp, humid):
+    if is_sensor_error(temp, humid):
+        return "ERROR_OFF"
+    return humidifier_idle_next_state(temp, humid)  # sensor recovered, recheck normally
+
+
+def humidifier_error_off_next_state(temp, humid):
+    if is_sensor_error(temp, humid):
+        return "ERROR_ON"
+    return humidifier_idle_next_state(temp, humid)  # sensor recovered, recheck normally
 
 
 humidifier_states = {
@@ -240,6 +336,19 @@ humidifier_states = {
         action=lambda: rgb_led_D7.show(0, hex_to_rgb('#FF0000')),
         duration_ms=2000,                    # red lasts 2s
         next_fn=humidifier_red_next_state,   # then branches based on humidity
+    ),
+    # additional feature: blink yellow every 1s while the sensor is in error
+    "ERROR_ON": State(
+        "ERROR_ON",
+        action=lambda: rgb_led_D7.show(0, hex_to_rgb('#FFFF00')),  # blink on
+        duration_ms=1000,
+        next_fn=humidifier_error_on_next_state,
+    ),
+    "ERROR_OFF": State(
+        "ERROR_OFF",
+        action=lambda: rgb_led_D7.show(0, hex_to_rgb('#000000')),  # blink off
+        duration_ms=1000,
+        next_fn=humidifier_error_off_next_state,
     ),
 }
 
@@ -280,3 +389,6 @@ async def main():
 
 
 run_loop(main())  # hand control over to the scheduler
+
+# Nguyen Lam Minh Hoa - 10422030
+# Truong Dang Khoa    - 10422038
