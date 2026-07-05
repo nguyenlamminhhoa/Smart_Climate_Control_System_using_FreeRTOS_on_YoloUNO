@@ -158,7 +158,7 @@ heater_states = {
     ),
     "WARNING": State(
         "WARNING",
-        action=lambda: rgb_led_D3.show(0, hex_to_rgb('#FF8000')),  # orange, Yellow because I see on Ohstream
+        action=lambda: rgb_led_D3.show(0, hex_to_rgb('##FFFF00')),  #Yellow, because Ohstream don't support orange
         next_fn=heater_next_state,
     ),
     "CRITICAL": State(
