@@ -7,9 +7,11 @@
 
 **Project Name:** Smart Controller System using RTOS
 
-**Authors:** Nguyen Lam Minh Hoa (10422030)
+**Authors:** 
 
-             Truong Dang Khoa (10422038)
+             Nguyen Lam Minh Hoa  - ID: 10422030
+
+             Truong Dang Khoa     - ID: 10422038
              
 **Instructor:** Dr. Le Trong Nhan
 
