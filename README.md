@@ -6,9 +6,14 @@
 ## 1. Project Information
 
 **Project Name:** Smart Controller System using RTOS
-**Authors:** Nguyen Lam Minh Hoa (10422030), Truong Dang Khoa (10422038)
+
+**Authors:** Nguyen Lam Minh Hoa (10422030)
+             Truong Dang Khoa (10422038)
+             
 **Instructor:** Dr. Le Trong Nhan
+
 **Course:** Realtime Systems – Vietnamese-German University
+
 **Date:** Summer 2025 – 2026
 
 ---
