@@ -9,9 +9,9 @@
 
 **Authors:** 
 
-             Nguyen Lam Minh Hoa  - ID: 10422030
+- Nguyen Lam Minh Hoa  - ID: 10422030
 
-             Truong Dang Khoa     - ID: 10422038
+- Truong Dang Khoa     - ID: 10422038
              
 **Instructor:** Dr. Le Trong Nhan
 
