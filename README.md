@@ -1,7 +1,7 @@
 # Smart Controller System using RTOS
 *A table-driven, RTOS-style Smart Climate Control System on YoloUNO (ESP32-S3)*
 
----
+
 
 ## 1. Project Information
 
@@ -19,13 +19,13 @@
 
 **Date:** Summer 2025 – 2026
 
----
+
 
 ## 2. Abstract
 
 This project implements a Smart Climate Control System on the YoloUNO (ESP32-S3) using a cooperative `asyncio` scheduler to emulate RTOS-style multitasking. A DHT20 sensor feeds temperature/humidity to a mutex-protected shared state, read by three independent control tasks (Heater, Cooler, Humidifier) plus a heartbeat task. All control behavior is driven by one generic, table-driven state-machine engine instead of ad-hoc `if/else` logic.
 
----
+
 
 ## 3. Features
 
@@ -34,7 +34,7 @@ This project implements a Smart Climate Control System on the YoloUNO (ESP32-S3)
 - Generic state-machine engine shared by all 3 control tasks (reactive, timed, and timed-then-reactive transitions)
 - Sensor error indicator: all actuators blink yellow + LCD shows "Sensor error" on a 0/0 reading, auto-recovers on valid data
 
----
+
 
 ## 4. System Architecture
 
@@ -56,7 +56,7 @@ Blinky Task (1000ms) — independent, no shared state
 - **Cooler (D5):** IDLE → COOLING (green, fixed 5s) once T > 30°C, then back to IDLE
 - **Humidifier (D7):** IDLE → GREEN (5s) → YELLOW (3s) → RED (2s) once H < 50%, then re-checks humidity to repeat or stop
 
----
+
 
 ## 5. Installation & Usage
 
@@ -68,13 +68,13 @@ git clone https://github.com/nguyenlamminhhoa/Smart_Climate_Control_System_using
 
 Open `rtos_controller_system.py` in the [OhStem Simulator](https://app.ohstem.vn/#!/vr) and run. The Serial Monitor prints `App started`, then `[SENSOR] temp=... humid=...` every 5 seconds, while the LCD and LEDs update live.
 
----
+
 
 ## 6. Results
 
 All required behaviors were validated in simulation: correct sensor reporting cadence, all 3 heater zones, timed cooler activation/deactivation, the full humidifier green→yellow→red cycle, and the sensor-error blink/recovery override. Full test cases and screenshots are in the [project report](Smart_Controller_System_using_RTOS.pdf).
 
----
+
 
 ## 7. Limitations
 
@@ -82,7 +82,7 @@ All required behaviors were validated in simulation: correct sensor reporting ca
 - Actuators are simulated via RGB LEDs, no physical output.
 - Cooperative `asyncio` scheduler has no task priorities (single-threaded, no preemption).
 
----
+
 
 ## 8. Future Work
 
@@ -91,7 +91,7 @@ All required behaviors were validated in simulation: correct sensor reporting ca
 - Closed-loop (hysteresis/PID) control
 - Wireless monitoring dashboard (MQTT / web server)
 
----
+
 
 ## 9. References
 
